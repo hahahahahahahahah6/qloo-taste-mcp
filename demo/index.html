@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Taste Match — powered by Qloo</title>
+<style>
+  :root { --bg:#0e0f13; --card:#17191f; --text:#f2f3f5; --muted:#9aa0a6;
+          --accent:#8ab4ff; --accent2:#c58aff; --border:#26282e; --danger:#ff8a80; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text);
+         font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+         display:flex; justify-content:center; padding:24px 12px 80px; }
+  main { width:100%; max-width:640px; }
+  h1 { font-size:1.6rem; margin:0 0 4px; }
+  .sub { color:var(--muted); margin-bottom:20px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:14px;
+          padding:16px; margin:14px 0; }
+  .card h2 { font-size:0.85rem; margin:0 0 10px; color:var(--muted);
+             text-transform:uppercase; letter-spacing:0.06em; }
+  .row { display:flex; gap:8px; }
+  input[type=text] { flex:1; background:var(--bg); border:1px solid var(--border);
+      color:var(--text); border-radius:10px; padding:12px; font-size:1rem; min-height:44px; }
+  button { background:var(--accent); color:#0e0f13; border:none; border-radius:10px;
+      padding:12px 18px; font-size:1rem; font-weight:700; cursor:pointer; min-height:44px; }
+  button:disabled { opacity:0.45; cursor:default; }
+  button.ghost { background:none; border:1px solid var(--border); color:var(--text); }
+  .results { display:grid; gap:8px; margin-top:10px; }
+  .hit { display:flex; justify-content:space-between; align-items:center;
+         padding:10px 12px; border:1px solid var(--border); border-radius:10px; }
+  .hit .meta small { color:var(--muted); display:block; font-size:0.8rem; }
+  .hit button { padding:8px 14px; min-height:0; font-size:0.9rem; }
+  .seeds { display:flex; flex-wrap:wrap; gap:8px; }
+  .seed { background:#1e2a45; border:1px solid #33507e; border-radius:20px;
+          padding:8px 8px 8px 14px; display:flex; align-items:center; gap:8px; }
+  .seed button { background:none; color:var(--muted); padding:4px 8px; min-height:0; }
+  .cats { display:flex; flex-wrap:wrap; gap:8px; }
+  .cat { border:1px solid var(--border); background:none; color:var(--text);
+         border-radius:20px; padding:10px 16px; font-weight:400; }
+  .cat.on { background:var(--accent2); color:#0e0f13; font-weight:700; border-color:var(--accent2); }
+  .cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:10px; margin-top:10px; }
+  .rec { border:1px solid var(--border); border-radius:12px; padding:12px;
+         background:linear-gradient(160deg,#1a1d26,#14161c); }
+  .rec .name { font-weight:700; margin-bottom:4px; }
+  .rec .desc { color:var(--muted); font-size:0.82rem; line-height:1.35; }
+  .rec .pop { margin-top:8px; font-size:0.75rem; color:var(--accent); }
+  .err { color:var(--danger); margin-top:8px; }
+  .hint { color:var(--muted); font-size:0.9rem; }
+  footer { color:var(--muted); font-size:0.8rem; text-align:center; margin-top:24px; }
+  footer a { color:var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>🎯 Taste Match</h1>
+  <div class="sub">Tell us what you love — Qloo's taste AI finds what you'll love next.</div>
+
+  <section class="card">
+    <h2>1 · Search things you like</h2>
+    <div class="row">
+      <input type="text" id="q" placeholder="e.g. Taylor Swift, ramen, Blade Runner…" autocomplete="off">
+      <button id="searchBtn">Search</button>
+    </div>
+    <div class="results" id="searchResults"></div>
+  </section>
+
+  <section class="card">
+    <h2>2 · Your taste seeds</h2>
+    <div class="seeds" id="seeds"><span class="hint">Nothing yet — search above and tap + to add.</span></div>
+  </section>
+
+  <section class="card">
+    <h2>3 · What do you want recommendations for?</h2>
+    <div class="cats" id="cats"></div>
+  </section>
+
+  <section class="card">
+    <h2>4 · Get recommendations</h2>
+    <button id="goBtn" disabled>✨ Match my taste</button>
+    <div class="err" id="err"></div>
+    <div class="cards" id="recs"></div>
+  </section>
+
+  <footer>Powered by <a href="https://www.qloo.com" target="_blank" rel="noopener">Qloo</a> Taste AI ·
+    built with <a href="https://github.com/hahahahahahahahah6/qloo-taste-mcp" target="_blank" rel="noopener">qloo-taste-mcp</a> (MCP server)</footer>
+</main>
+
+<script>
+(function(){
+  "use strict";
+  var seeds = [];   // [{entity_id, name}]
+  var want = null;
+
+  function el(id){ return document.getElementById(id); }
+  function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+
+  function refresh(){
+    var box = el("seeds");
+    if(!seeds.length){ box.innerHTML = '<span class="hint">Nothing yet — search above and tap + to add.</span>'; }
+    else {
+      box.innerHTML = "";
+      seeds.forEach(function(s,i){
+        var d = document.createElement("span");
+        d.className = "seed";
+        d.innerHTML = esc(s.name) + " ";
+        var b = document.createElement("button");
+        b.textContent = "×"; b.setAttribute("aria-label","remove");
+        b.onclick = function(){ seeds.splice(i,1); refresh(); };
+        d.appendChild(b); box.appendChild(d);
+      });
+    }
+    el("goBtn").disabled = !(seeds.length && want);
+  }
+
+  el("searchBtn").onclick = doSearch;
+  el("q").addEventListener("keydown", function(e){ if(e.key==="Enter") doSearch(); });
+
+  function doSearch(){
+    var q = el("q").value.trim();
+    if(!q) return;
+    el("searchResults").innerHTML = '<span class="hint">Searching…</span>';
+    fetch("/api/search?q="+encodeURIComponent(q)).then(function(r){ return r.json(); }).then(function(d){
+      var box = el("searchResults");
+      if(d.error){ box.innerHTML = '<div class="err">'+esc(d.error)+'</div>'; return; }
+      if(!d.results.length){ box.innerHTML = '<span class="hint">No matches — try something else.</span>'; return; }
+      box.innerHTML = "";
+      d.results.forEach(function(r){
+        var div = document.createElement("div");
+        div.className = "hit";
+        var type = (r.types && r.types[0] || "").replace("urn:entity:","");
+        div.innerHTML = '<span class="meta"><b>'+esc(r.name)+'</b><small>'+esc(type)+
+          (r.popularity!=null ? " · popularity "+Math.round(r.popularity*100)+"%" : "")+'</small></span>';
+        var b = document.createElement("button");
+        b.textContent = "+ seed";
+        b.onclick = function(){
+          if(!seeds.some(function(s){ return s.entity_id===r.entity_id; })){
+            seeds.push({entity_id:r.entity_id, name:r.name});
+            refresh();
+          }
+        };
+        div.appendChild(b); box.appendChild(div);
+      });
+    }).catch(function(){ el("searchResults").innerHTML = '<div class="err">Search failed.</div>'; });
+  }
+
+  fetch("/api/result-types").then(function(r){ return r.json(); }).then(function(cats){
+    var box = el("cats");
+    cats.forEach(function(c){
+      var b = document.createElement("button");
+      b.className = "cat"; b.textContent = c;
+      b.onclick = function(){
+        want = c;
+        box.querySelectorAll(".cat").forEach(function(x){ x.classList.remove("on"); });
+        b.classList.add("on");
+        refresh();
+      };
+      box.appendChild(b);
+    });
+  });
+
+  el("goBtn").onclick = function(){
+    el("err").textContent = "";
+    el("recs").innerHTML = '<span class="hint">Asking Qloo…</span>';
+    fetch("/api/recommend", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({seeds: seeds.map(function(s){ return s.entity_id; }), want: want})
+    }).then(function(r){ return r.json().then(function(d){ return {ok:r.ok, d:d}; }); }).then(function(x){
+      var box = el("recs");
+      if(!x.ok){ el("err").textContent = x.d.error || "failed"; box.innerHTML=""; return; }
+      if(!x.d.results.length){ box.innerHTML = '<span class="hint">No recommendations — try different seeds.</span>'; return; }
+      box.innerHTML = "";
+      x.d.results.forEach(function(r){
+        var div = document.createElement("div");
+        div.className = "rec";
+        div.innerHTML = '<div class="name">'+esc(r.name)+'</div>' +
+          (r.description ? '<div class="desc">'+esc(r.description)+'</div>' : "") +
+          (r.popularity!=null ? '<div class="pop">▲ '+Math.round(r.popularity*100)+'% popularity</div>' : "");
+        box.appendChild(div);
+      });
+    }).catch(function(){ el("err").textContent = "Request failed."; el("recs").innerHTML=""; });
+  };
+
+  refresh();
+})();
+</script>
+</body>
+</html>
