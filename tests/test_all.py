@@ -85,12 +85,25 @@ class QlooClientTests(unittest.TestCase):
         self.assertIn("urn%3Aentity%3Arestaurant", fake.last_url)
 
     def test_recommend_builds_insights_query(self):
-        fake = fake_urlopen_factory({"results": []})
+        fake = fake_urlopen_factory({"results": {"entities": []}})
         with patch("urllib.request.urlopen", fake):
             qloo.recommend(["urn:entity:artist:taylorswift"], "urn:entity:movie", take=3)
         self.assertIn("/v2/insights", fake.last_url)
         self.assertIn("filter.type=urn%3Aentity%3Amovie", fake.last_url)
         self.assertIn("signal.interests.entities=", fake.last_url)
+
+    def test_recommend_parses_real_insights_shape(self):
+        # Regression: real /v2/insights returns {"results": {"entities": [...]}},
+        # not {"results": [...]}. The old code crashed on this shape.
+        entity = {"name": "Dune", "entity_id": "urn:entity:movie:dune",
+                  "types": ["urn:entity:movie"], "popularity": 0.9,
+                  "properties": {"description": "Epic sci-fi."}}
+        fake = fake_urlopen_factory({"results": {"entities": [entity]}})
+        with patch("urllib.request.urlopen", fake):
+            out = qloo.recommend(["urn:entity:movie:starwars"], "urn:entity:movie")
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["name"], "Dune")
+        self.assertEqual(out[0]["description"], "Epic sci-fi.")
 
     def test_recommend_needs_seed(self):
         with self.assertRaises(qloo.QlooError):
@@ -109,6 +122,24 @@ class QlooClientTests(unittest.TestCase):
             out = qloo.search_tags("jazz")
         self.assertEqual(out[0]["tag_id"], "urn:tag:genre:jazz")
         self.assertIn("/v2/tags", fake.last_url)
+
+    def test_tags_uses_filter_query_param(self):
+        # Per official docs, /v2/tags takes filter.query, not term.
+        fake = fake_urlopen_factory({"results": {"tags": []}})
+        with patch("urllib.request.urlopen", fake):
+            qloo.search_tags("beach")
+        self.assertIn("filter.query=beach", fake.last_url)
+        self.assertNotIn("term=", fake.last_url)
+
+    def test_tags_parses_real_results_tags_shape(self):
+        # Real /v2/tags returns {"results": {"tags": [...]}}.
+        payload = {"results": {"tags": [
+            {"name": "beach", "tag_id": "urn:tag:travel_theme:beach", "types": []}]}}
+        fake = fake_urlopen_factory(payload)
+        with patch("urllib.request.urlopen", fake):
+            out = qloo.search_tags("beach")
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["tag_id"], "urn:tag:travel_theme:beach")
 
 
 class ServerProtocolTests(unittest.TestCase):

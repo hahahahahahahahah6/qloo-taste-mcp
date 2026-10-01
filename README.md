@@ -12,7 +12,7 @@ Any MCP-compatible agent (Claude Code, etc.) gets four tools:
 |---|---|
 | `qloo_search` | Search the taste graph for entities ("Taylor Swift", "ramen") → entity IDs |
 | `qloo_recommend` | Taste-based recommendations seeded by entity IDs (movies, restaurants, brands…) |
-| `qloo_trending` | Currently trending entities in a category |
+| `qloo_trending` | Currently trending entities in a category (per Qloo docs, `urn:entity:brand` is fully supported; `urn:entity:tv_show` and `urn:entity:movie` are beta) |
 | `qloo_tags` | Search Qloo's tag taxonomy (genres, cuisines, travel themes) |
 
 Example agent flow: "I love Taylor Swift and Wes Anderson films — find me a restaurant in LA" → `qloo_search` for the seeds → `qloo_recommend` with `urn:entity:restaurant`.

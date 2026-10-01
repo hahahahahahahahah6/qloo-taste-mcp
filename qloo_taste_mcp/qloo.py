@@ -55,6 +55,26 @@ def _get(path: str, params: dict) -> dict:
         raise QlooError(f"Could not reach Qloo API: {e.reason}") from e
 
 
+def _as_list(data: dict) -> list:
+    """Extract the entity/tag list from a Qloo response, tolerating shapes.
+
+    /search returns {"results": [...]}.
+    /v2/insights returns {"results": {"entities": [...]}}.
+    /v2/tags returns {"results": {"tags": [...]}}.
+    """
+    results = data.get("results", [])
+    if isinstance(results, dict):
+        for key in ("entities", "tags"):
+            if isinstance(results.get(key), list):
+                return results[key]
+        # Last resort: first list value found.
+        for value in results.values():
+            if isinstance(value, list):
+                return value
+        return []
+    return results if isinstance(results, list) else []
+
+
 def _compact_entity(e: dict) -> dict:
     """Reduce a raw Qloo entity to the fields an agent actually needs."""
     out = {
@@ -78,7 +98,7 @@ def search_entities(query: str, types: list[str] | None = None, take: int = 10) 
     if types:
         params["types"] = types
     data = _get("/search", params)
-    return [_compact_entity(e) for e in data.get("results", [])]
+    return [_compact_entity(e) for e in _as_list(data)]
 
 
 def recommend(entity_ids: list[str], result_type: str, take: int = 10) -> list[dict]:
@@ -91,19 +111,19 @@ def recommend(entity_ids: list[str], result_type: str, take: int = 10) -> list[d
         "take": max(1, min(take, 50)),
     }
     data = _get("/v2/insights", params)
-    return [_compact_entity(e) for e in data.get("results", [])]
+    return [_compact_entity(e) for e in _as_list(data)]
 
 
 def trending(entity_type: str, take: int = 10) -> list[dict]:
     """Currently trending entities within a category (e.g. urn:entity:brand)."""
     data = _get("/trends/category", {"type": entity_type, "take": max(1, min(take, 50))})
-    return [_compact_entity(e) for e in data.get("results", [])]
+    return [_compact_entity(e) for e in _as_list(data)]
 
 
 def search_tags(term: str, take: int = 10) -> list[dict]:
     """Search Qloo's tag taxonomy (useful for building tag-based filters)."""
-    data = _get("/v2/tags", {"term": term, "take": max(1, min(take, 50))})
+    data = _get("/v2/tags", {"filter.query": term, "take": max(1, min(take, 50))})
     return [
         {"name": t.get("name"), "tag_id": t.get("tag_id"), "types": t.get("types")}
-        for t in data.get("results", [])
+        for t in _as_list(data)
     ]

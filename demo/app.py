@@ -107,7 +107,7 @@ def main():
         qloo._api_key()
     except qloo.QlooError as e:
         sys.stderr.write(f"taste-match: warning: {e}\n")
-    srv = HTTPServer(("0.0.0.0", port), Handler)
+    srv = HTTPServer(("127.0.0.1", port), Handler)
     print(f"Taste Match demo on http://localhost:{port} (set QLOO_API_KEY first)")
     srv.serve_forever()
 
