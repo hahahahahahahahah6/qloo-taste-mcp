@@ -51,7 +51,7 @@ QLOO_API_KEY=<your key> python3 demo/app.py 8000
 ## Tests
 
 ```bash
-python3 -m unittest discover -s tests -v   # 15 tests, all HTTP mocked
+python3 -m unittest discover -s tests -v   # 18 tests, all HTTP mocked
 ```
 
 ## License
