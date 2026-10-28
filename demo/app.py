@@ -102,12 +102,15 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else int(os.environ.get("PORT", "8000"))
+    port = int(sys.argv[1]) if len(sys.argv) > 1 else int(os.environ.get("PORT", "8011"))
+    # Public hosts (e.g. Render) set PORT and need an external bind; without
+    # PORT, stay on localhost so local runs are unchanged.
+    host = "0.0.0.0" if os.environ.get("PORT") else "127.0.0.1"
     try:
         qloo._api_key()
     except qloo.QlooError as e:
         sys.stderr.write(f"taste-match: warning: {e}\n")
-    srv = HTTPServer(("127.0.0.1", port), Handler)
+    srv = HTTPServer((host, port), Handler)
     print(f"Taste Match demo on http://localhost:{port} (set QLOO_API_KEY first)")
     srv.serve_forever()
 
